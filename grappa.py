@@ -1,5 +1,5 @@
 """
-Written by Mehrdad Anvari-Fard, Mahdi Bazargani, Mohhammd-Javad Heidari
+Written by Mehrdad Anvari-Fard, Mahdi Bazargani, Mohammad Javad Heidari
 to accelerate the grappa implementation in the pygrappa repository owned
 by Nicholas McKibben using pytorch GPU capabilities and some other tricks.
 
