@@ -77,6 +77,31 @@ def torch_setdiff(t1: torch.Tensor,
     difference = uniques[counts == 1]
     return difference
  
+def find_unique_patterns(kspace: torch.Tensor,
+                         kernel_size: int,
+                         coil_axis: int=-1) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    This function can be employed to find unique pattern once (for the first slice)
+    and then used for other slices to avoid wasting time.
+    """
+    if len(kspace.shape) != 3:
+        raise ValueError("`kspace` should be 3D: (width, height, coil)")
+    kspace = torch.moveaxis(kspace, coil_axis, -1)
+    mask = torch.abs(kspace[...,0])>0
+    print(mask.shape)
+    if mask.sum().item() == 0:
+        raise ValueError("no acquire sample detected!")
+    if (mask != 0).sum().item() == mask.shape[0] * mask.shape[1]:
+        raise ValueError("The kspace is fully sampled!")
+    
+    # Extract patches and reshape for uniqueness check
+    P = view_as_windows(mask, (kernel_size, kernel_size))
+    P = P.reshape((-1, kernel_size, kernel_size))
+
+    # Find unique patterns
+    P_unique, iidx = torch.unique(P, return_inverse=True, dim=0)
+
+    return P_unique, iidx
 
 def pattern_matching(T: torch.Tensor, P: torch.Tensor) -> torch.Tensor:
     """
