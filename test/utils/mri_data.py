@@ -13,6 +13,7 @@ import xml.etree.ElementTree as etree
 from pathlib import Path
 from typing import (
     Any,
+    List,
     Callable,
     Dict,
     NamedTuple,
@@ -129,6 +130,7 @@ class SliceDataset(torch.utils.data.Dataset):
         volume_sample_rate: Optional[float] = None,
         dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
         num_cols: Optional[Tuple[int]] = None,
+        num_coils: Optional[List[int]] = None,
         raw_sample_filter: Optional[Callable] = None,
     ):
         """
@@ -154,6 +156,9 @@ class SliceDataset(torch.utils.data.Dataset):
                 information for faster load times.
             num_cols: Optional; If provided, only slices with the desired
                 number of columns will be considered.
+            num_coils: Optional; If provided, only slices with the desired
+                number of coils will be considered. This should be a list of
+                integers, e.g. [8, 14]. If None, all coils will be considered.
             raw_sample_filter: Optional; A callable object that takes an raw_sample
                 metadata as input and returns a boolean indicating whether the
                 raw_sample should be included in the dataset.
@@ -196,7 +201,9 @@ class SliceDataset(torch.utils.data.Dataset):
         if dataset_cache.get(root) is None or not use_dataset_cache:
             files = list(Path(root).iterdir())
             for fname in sorted(files):
-                metadata, num_slices = self._retrieve_metadata(fname)
+                metadata, num_slices, n_coils = self._retrieve_metadata(fname)
+                if (num_coils is not None and n_coils not in num_coils):
+                    continue
                 new_raw_samples = []
                 for slice_ind in range(num_slices):
                     raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata)
@@ -262,6 +269,7 @@ class SliceDataset(torch.utils.data.Dataset):
             padding_right = padding_left + enc_limits_max
 
             num_slices = hf["kspace"].shape[0]
+            num_coils = hf["kspace"].shape[1]
 
             metadata = {
                 "padding_left": padding_left,
@@ -271,14 +279,14 @@ class SliceDataset(torch.utils.data.Dataset):
                 **hf.attrs,
             }
 
-        return metadata, num_slices
+        return metadata, num_slices, num_coils
 
     def __len__(self):
         return len(self.raw_samples)
 
     def __getitem__(self, i: int):
         fname, dataslice, metadata = self.raw_samples[i]
-        
+
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
             mask = np.asarray(hf["mask"]) if "mask" in hf else None
@@ -294,4 +302,3 @@ class SliceDataset(torch.utils.data.Dataset):
             sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
 
         return sample
-
