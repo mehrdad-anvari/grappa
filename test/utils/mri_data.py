@@ -29,6 +29,7 @@ import numpy as np
 
 import torch
 import yaml
+import re
 
 
 def et_query(
@@ -131,6 +132,7 @@ class SliceDataset(torch.utils.data.Dataset):
         dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
         num_cols: Optional[Tuple[int]] = None,
         num_coils: Optional[List[int]] = None,
+        regex_ex: Optional[str] = None,
         raw_sample_filter: Optional[Callable] = None,
     ):
         """
@@ -159,6 +161,8 @@ class SliceDataset(torch.utils.data.Dataset):
             num_coils: Optional; If provided, only slices with the desired
                 number of coils will be considered. This should be a list of
                 integers, e.g. [8, 14]. If None, all coils will be considered.
+            regex_ex: Optional; If provided, only slices with the acquisition name
+                that match the regex expression will be considered. 
             raw_sample_filter: Optional; A callable object that takes an raw_sample
                 metadata as input and returns a boolean indicating whether the
                 raw_sample should be included in the dataset.
@@ -202,7 +206,11 @@ class SliceDataset(torch.utils.data.Dataset):
             files = list(Path(root).iterdir())
             for fname in sorted(files):
                 metadata, num_slices, n_coils = self._retrieve_metadata(fname)
+                acquisition = metadata['acquisition']
                 if (num_coils is not None and n_coils not in num_coils):
+                    continue
+                # check the if the regex expression match the acquisition
+                if (regex_ex is not None and re.search(pattern=regex_ex, string=acquisition) is None):
                     continue
                 new_raw_samples = []
                 for slice_ind in range(num_slices):
