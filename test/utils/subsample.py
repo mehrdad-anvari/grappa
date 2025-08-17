@@ -475,6 +475,93 @@ class MagicMaskFractionFunc(MagicMaskFunc):
         return center_mask, accel_mask, num_low_frequencies
 
 
+class OneSidedFractionFunc(MaskFunc):
+    """
+    Masking function for exploiting conjugate symmetry via sampling only
+    one side of the kspace. Also the the equispaced phase encoding lines
+    are closer to each other which is helpful in GRAPPA algorithm.
+    """
+
+    def sample_mask(
+        self,
+        shape: Sequence[int],
+        offset: Optional[int],
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
+        """
+        Sample a new k-space mask.
+
+        This function samples and returns two components of a k-space mask: 1)
+        the center mask (e.g., for sensitivity map calculation) and 2) the
+        acceleration mask (for the edge of k-space). Both of these masks, as
+        well as the integer of low frequency samples, are returned.
+
+        Args:
+            shape: Shape of the k-space to subsample.
+            offset: Offset from 0 to begin mask (for equispaced masks).
+
+        Returns:
+            A 3-tuple contaiing 1) the mask for the center of k-space, 2) the
+            mask for the high frequencies of k-space, and 3) the integer count
+            of low frequency samples.
+        """
+        num_cols = shape[-2]
+        fraction_low_freqs, acceleration = self.choose_acceleration()
+        num_cols = shape[-2]
+        num_low_frequencies = round(num_cols * fraction_low_freqs)
+
+        # bound the number of low frequencies between 1 and target columns
+        target_columns_to_sample = round(num_cols / acceleration)
+        num_low_frequencies = max(min(num_low_frequencies, target_columns_to_sample), 1)
+
+        # adjust acceleration rate based on target acceleration.
+        adjusted_target_columns_to_sample = (
+            target_columns_to_sample - num_low_frequencies
+        )
+        adjusted_acceleration = 0
+        pad = (num_cols - num_low_frequencies + 1) // 2 + num_low_frequencies
+        if adjusted_target_columns_to_sample > 0:
+            adjusted_acceleration = round(
+                (num_cols - pad) / adjusted_target_columns_to_sample
+            )
+
+        center_mask = self.reshape_mask(
+            self.calculate_center_mask(shape, num_low_frequencies), shape
+        )
+        accel_mask = self.reshape_mask(
+            self.calculate_acceleration_mask(
+                num_cols, adjusted_acceleration, num_low_frequencies
+            ),
+            shape,
+        )
+
+        return center_mask, accel_mask, num_low_frequencies
+
+    def calculate_acceleration_mask(
+        self,
+        num_cols: int,
+        acceleration: int,
+        num_low_frequencies: int,
+    ) -> np.ndarray:
+        """
+        Produce mask for non-central acceleration lines.
+
+        Args:
+            num_cols: Number of columns of k-space (2D subsampling).
+            acceleration: Desired acceleration rate.
+            num_low_frequencies: Not used.
+
+        Returns:
+            A mask for the high spatial frequencies of k-space.
+        """
+
+        mask = np.zeros(num_cols, dtype=np.float32)
+        pad = (num_cols - num_low_frequencies + 1) // 2
+
+        mask[pad + num_low_frequencies :: acceleration] = 1
+
+        return mask
+
+
 def create_mask_for_mask_type(
     mask_type_str: str,
     center_fractions: Sequence[float],
@@ -500,5 +587,7 @@ def create_mask_for_mask_type(
         return MagicMaskFunc(center_fractions, accelerations)
     elif mask_type_str == "magic_fraction":
         return MagicMaskFractionFunc(center_fractions, accelerations)
+    elif mask_type_str == "one_sided":
+        return OneSidedFractionFunc(center_fractions, accelerations)
     else:
         raise ValueError(f"{mask_type_str} not supported")
