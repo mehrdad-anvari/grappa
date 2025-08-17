@@ -6,6 +6,7 @@ by Nicholas McKibben using pytorch GPU capabilities and some other tricks.
 The code is still under development!!
 """
 import torch
+import time
 
 def unravel_index(flat_index, shape):
     # Ensure flat_index is a tensor
@@ -188,6 +189,7 @@ def grappa(kspace: torch.Tensor,
     mask = torch.abs(kspace[..., 0]) > 0
 
     # Quit early if there are no holes
+    t1_start = time.perf_counter()
     if (mask).all():
         return torch.moveaxis(kspace, -1, coil_axis)
     
@@ -196,7 +198,8 @@ def grappa(kspace: torch.Tensor,
     P = P.reshape((-1, kx, ky))
 
     # Find the unique patches and associate them with indices
-    if unique_patterns == None:
+    
+    if unique_patterns is None:
         if undersampling_pattern == "2D":
             P, iidx = torch.unique(P, return_inverse=True, dim=0)
         elif undersampling_pattern == "1D":
@@ -210,7 +213,6 @@ def grappa(kspace: torch.Tensor,
     else:
         iidx = pattern_matching(P,unique_patterns)
         P = unique_patterns
-
     # Filter out geometries that don't have a hole at the center.
     # These are all the kernel geometries we actually need to
     # compute weights for.
@@ -225,9 +227,13 @@ def grappa(kspace: torch.Tensor,
 
     kspace_windows = view_as_windows(kspace, (kx,ky,nc)).reshape((-1, kx, ky, nc))
     A = view_as_windows(calib, (kx, ky, nc)).reshape((-1, kx, ky, nc))
+    t1_end = time.perf_counter()
+    t_unique = t1_end - t1_start
 
+    t2_total, t3_total = 0.0, 0.0
     for ii in validP:
-        
+        # Step 2: Kernel calibration (weights)
+        t2_start = time.perf_counter()
         S = A[:, P[ii, ...]]
         T = A[:, kx2, ky2, :]
         ShS = S.conj().T @ S
@@ -235,7 +241,11 @@ def grappa(kspace: torch.Tensor,
         lamda0 = (lamda*torch.linalg.norm(ShS)/ShS.shape[0])
         W = torch.linalg.solve(
             ShS + lamda0*torch.eye(ShS.shape[0]).to(device), ShT)
-        
+        t2_end = time.perf_counter()
+        t2_total += (t2_end - t2_start)
+
+        # Step 3: Estimation of missing samples
+        t3_start = time.perf_counter()
         idx_1d = torch.nonzero(iidx == ii)
         idx = unravel_index(idx_1d, Psh[:2])
         x, y = idx[0]+kx2, idx[1]+ky2
@@ -246,8 +256,10 @@ def grappa(kspace: torch.Tensor,
         S = kspace_windows[idx_1d,P[ii,...]]
         
         kspace[x,y] = S @ W
+        t3_end = time.perf_counter()
+        t3_total += (t3_end - t3_start)
         
-    return torch.moveaxis(kspace, -1, coil_axis)
+    return torch.moveaxis(kspace, -1, coil_axis), (t_unique, t2_total, t3_total)
 
 if __name__ == '__main__':
     pass
