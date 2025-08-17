@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torch-grappa"
+version = "0.0.1"
+description = "Torch based implementation of grappa algorithm"
+authors = [
+    { name = "Mehrdad Anvari-Fard", email = "mehrdad.anvarifard@gmail.com" },
+    { name = "Mahdi Bazargari", email = "mahdibazargani1@gmail.com"},
+    { name = "Mohammad Javad Heidari", email = "mj.heidary98@gmail.com"},
+]
+readme = "README.md"
+keywords = ["grappa", "gpu", "torch", "cuda", "mri"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "torch",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["grappa*"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
