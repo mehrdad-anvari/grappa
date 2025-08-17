@@ -1,20 +1,20 @@
 from utils.mri_data import SliceDataset
-from utils.transforms import to_tensor, complex_center_crop
+from utils.transforms import to_tensor, complex_center_crop, tensor_to_complex_np
 from utils.fftc import ifft2c_new
 from utils.math import complex_abs
 from utils.coil_combine import rss
-from utils.subsample import MagicMaskFractionFunc
+from utils.subsample import create_mask_for_mask_type
+from utils.evaluate import ssim, psnr, nmse
 import matplotlib.pyplot as plt
 
 from grappa.grappa import grappa
 from utils.pygrappa import grappa as pygrappa
 
 import torch
+import numpy as np
 
 center_fractions = 0.08
-maskClass = MagicMaskFractionFunc(
-    center_fractions=[center_fractions], accelerations=[4]
-)
+mask_func = create_mask_for_mask_type(mask_type_str='one_sided',center_fractions=[center_fractions], accelerations=[4])
 
 
 def get_calib(kspace: torch.Tensor, center_fraction: float = 0.08) -> torch.Tensor:
@@ -37,7 +37,7 @@ def get_calib(kspace: torch.Tensor, center_fraction: float = 0.08) -> torch.Tens
     if kspace.ndim != 3:
         raise ValueError("Expected kspace shape (coils, sx, sy)")
 
-    coils, sx, sy = kspace.shape
+    _, _, sy = kspace.shape
 
     # Compute size along phase-encode (sy)
     sy_calib = int(round(sy * center_fraction))
@@ -53,11 +53,13 @@ def get_calib(kspace: torch.Tensor, center_fraction: float = 0.08) -> torch.Tens
 
 
 def transform(kspace, mask, target, attrs, name, dataslice):
-    kspace = torch.tensor(kspace)
-    calib = get_calib(kspace, center_fractions)
-    mask = maskClass(shape=kspace.shape)[0]
-    masked_kspace = kspace * mask
-    return masked_kspace, calib, mask
+    kspace = to_tensor(kspace)
+    calib = get_calib(torch.view_as_complex_copy(kspace), center_fractions)
+    mask, _ = mask_func(kspace.shape)
+    masked_kspace = kspace * mask - 0.0 
+    plt.imshow(np.log(np.abs(tensor_to_complex_np(masked_kspace)[0])), cmap="gray")
+    plt.savefig("test/results/mask2.png")
+    return masked_kspace, kspace, calib, mask
 
 
 dataset = SliceDataset(
@@ -68,11 +70,24 @@ dataset = SliceDataset(
     regex_ex="T2",
 )
 
-for kspace, calib, mask in dataset:
-    kspace: torch.Tensor
+for masked_kspace, original_kspace, calib, mask in dataset:
+    # ground truth image
+    original_kspace: torch.Tensor
+    kspace0 = original_kspace.detach().clone()
+    image_gt = ifft2c_new(kspace0)
+    crop_size = (image_gt.shape[-2], image_gt.shape[-2])
+    image_gt = complex_center_crop(image_gt, crop_size)
+    image_gt = complex_abs(image_gt)
+    image_gt = rss(image_gt)
+
+    # proposed grappa
+    masked_kspace: torch.Tensor
     calib: torch.Tensor
     kspace1, (t_unique, t_weights, t_estimation) = grappa(
-        kspace.detach().clone().cuda(), calib.cuda(), coil_axis=0
+        torch.view_as_complex_copy(masked_kspace).cuda(),
+        calib.cuda(),
+        coil_axis=0,
+        undersampling_pattern="2D",
     )
 
     print(f"Unique pattern search: {t_unique:.4f} s")
@@ -87,10 +102,15 @@ for kspace, calib, mask in dataset:
     image = complex_abs(image)
     image = rss(image)
 
+    print("SSIM: ", ssim(image_gt.numpy(), image.numpy()))
+    print("PSNR: ", psnr(image_gt.numpy(), image.numpy()))
+    print("NMSE: ", nmse(image_gt.numpy(), image.numpy()))
+
     plt.imshow(image, cmap="gray")
     plt.savefig("test/results/proposed_grappa.png")
 
-    kspace = kspace.detach().clone().numpy()
+    # pygrappa
+    kspace = torch.view_as_complex_copy(masked_kspace).numpy()
     calib = calib.numpy()
     kspace2, (t_unique, t_weights, t_estimation) = pygrappa(kspace, calib, coil_axis=0)
 
@@ -106,8 +126,12 @@ for kspace, calib, mask in dataset:
     image = complex_abs(image)
     image = rss(image)
 
+    print("SSIM: ", ssim(image_gt.numpy(), image.numpy()))
+    print("PSNR: ", psnr(image_gt.numpy(), image.numpy()))
+    print("NMSE: ", nmse(image_gt.numpy(), image.numpy()))
+
     plt.imshow(image, cmap="gray")
     plt.savefig("test/results/pygrappa_grappa.png")
 
-    print("speed up factor (T_pygrappa/T_proposed) = ", total_pygrappa/total_proposed)
+    print("speed up factor (T_pygrappa/T_proposed) = ", total_pygrappa / total_proposed)
     break
