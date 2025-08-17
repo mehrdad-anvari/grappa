@@ -14,7 +14,9 @@ import torch
 import numpy as np
 
 center_fractions = 0.08
-mask_func = create_mask_for_mask_type(mask_type_str='one_sided',center_fractions=[center_fractions], accelerations=[4])
+mask_func = create_mask_for_mask_type(
+    mask_type_str="one_sided", center_fractions=[center_fractions], accelerations=[4]
+)
 
 
 def get_calib(kspace: torch.Tensor, center_fraction: float = 0.08) -> torch.Tensor:
@@ -56,9 +58,16 @@ def transform(kspace, mask, target, attrs, name, dataslice):
     kspace = to_tensor(kspace)
     calib = get_calib(torch.view_as_complex_copy(kspace), center_fractions)
     mask, _ = mask_func(kspace.shape)
-    masked_kspace = kspace * mask - 0.0 
-    plt.imshow(np.log(np.abs(tensor_to_complex_np(masked_kspace)[0])), cmap="gray")
-    plt.savefig("test/results/mask2.png")
+    masked_kspace = kspace * mask - 0.0
+    plt.figure(dpi=1200)
+    plt.axis(False)
+    plt.title("undersampled k-space")
+    crop_size = (masked_kspace.shape[-2], masked_kspace.shape[-2])
+    cropped_mask = complex_center_crop(masked_kspace, crop_size)
+    plt.imshow(
+        np.log(np.abs(tensor_to_complex_np(cropped_mask)[0]) + 1e-6), cmap="gray"
+    )
+    plt.savefig("test/results/test_grappa_mask.png")
     return masked_kspace, kspace, calib, mask
 
 
@@ -106,6 +115,9 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     print("PSNR: ", psnr(image_gt.numpy(), image.numpy()))
     print("NMSE: ", nmse(image_gt.numpy(), image.numpy()))
 
+    plt.figure(dpi=1200)
+    plt.axis(False)
+    plt.title("proposed")
     plt.imshow(image, cmap="gray")
     plt.savefig("test/results/proposed_grappa.png")
 
@@ -130,6 +142,9 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     print("PSNR: ", psnr(image_gt.numpy(), image.numpy()))
     print("NMSE: ", nmse(image_gt.numpy(), image.numpy()))
 
+    plt.figure(dpi=1200)
+    plt.axis(False)
+    plt.title("pygrappa")
     plt.imshow(image, cmap="gray")
     plt.savefig("test/results/pygrappa_grappa.png")
 
