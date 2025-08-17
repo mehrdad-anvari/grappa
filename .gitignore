@@ -3,3 +3,4 @@ test/data/
 test/results
 __pycache__/
 dist/
+*.egg-info/
