@@ -12,6 +12,14 @@ Our implementation is inspired by the pygrappa repository, with the following ke
 
 In typical scenarios, this optimized code can achieve speedups of up to 30 times compared to standard implementations.
 
+## Installation
+To build and install this package locally in **editable mode**, follow these steps:
+```bash
+pip install build
+python -m build
+pip intall -e .
+```
+
 ## Contributing
 We welcome contributions to improve this implementation further. If you have suggestions, bug reports, or feature requests, please open an issue or submit a pull request.
 
