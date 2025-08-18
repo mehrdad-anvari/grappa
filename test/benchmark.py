@@ -26,7 +26,7 @@ def benchmark(
     lamda: float = 0.1,
     prefix: str = "",
 ):
-    csv_file_name = f"{prefix}_{contrast}_{mask_name}_{N_coils}_{R}_{kernel_size[0]}x{kernel_size[1]}"
+    csv_file_name = f"{prefix}_{contrast}_{mask_name}_{N_coils}_{R}_{kernel_size[0]}x{kernel_size[1]}_{lamda}"
     print(csv_file_name)
 
     def transform(kspace, mask, target, attrs, name, dataslice):
