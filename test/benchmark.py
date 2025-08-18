@@ -5,6 +5,7 @@ from utils.math import complex_abs
 from utils.coil_combine import rss
 from utils.subsample import create_mask_for_mask_type
 from utils.evaluate import ssim, psnr, nmse
+from utils.calib import get_calib
 
 from grappa.grappa import grappa
 from utils.pygrappa import grappa as pygrappa
@@ -27,43 +28,6 @@ print(csv_file_name)
 mask_func = create_mask_for_mask_type(
     mask_type_str="one_sided", center_fractions=[center_fractions], accelerations=[R]
 )
-
-
-def get_calib(
-    kspace: torch.Tensor, center_fraction: float = center_fractions
-) -> torch.Tensor:
-    """
-    Extracts calibration region from k-space by keeping full sx
-    and only a fraction of the center along sy.
-
-    Parameters
-    ----------
-    kspace : torch.Tensor
-        Input k-space of shape (coils, sx, sy).
-    center_fraction : float
-        Fraction of sy dimension to keep in the center (0 < f <= 1).
-
-    Returns
-    -------
-    calib : torch.Tensor
-        Calibration region of shape (coils, sx, sy_calib).
-    """
-    if kspace.ndim != 3:
-        raise ValueError("Expected kspace shape (coils, sx, sy)")
-
-    _, _, sy = kspace.shape
-
-    # Compute size along phase-encode (sy)
-    sy_calib = int(round(sy * center_fraction))
-    sy_calib = max(sy_calib, 1)
-
-    # Center index
-    cy = sy // 2
-    y_start, y_end = cy - sy_calib // 2, cy + (sy_calib + 1) // 2
-
-    calib = kspace[:, :, y_start:y_end]
-
-    return calib
 
 
 def transform(kspace, mask, target, attrs, name, dataslice):
