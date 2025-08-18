@@ -1,6 +1,3 @@
-# import os
-# os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
 from utils.mri_data import SliceDataset
 from utils.transforms import to_tensor, complex_center_crop
 from utils.fftc import ifft2c_new
@@ -15,9 +12,6 @@ from utils.pygrappa import grappa as pygrappa
 import pandas as pd
 import torch
 
-
-
-
 center_fractions = 0.08
 R = 4
 mask_name = "one_sided"
@@ -26,6 +20,7 @@ contrast = "T2"
 N = 50  # number of slices to process
 kernel_size = (5, 5)
 lamda_list = [0.3, 0.2, 0.1, 0.01, 0.001, 0.0001]
+
 
 def get_calib(
     kspace: torch.Tensor, center_fraction: float = center_fractions
@@ -73,16 +68,14 @@ def transform(kspace, mask, target, attrs, name, dataslice):
 
 
 for lamda in lamda_list:
-    csv_file_name = (
-        f"{contrast}_{mask_name}_{N_coils}_{R}_{kernel_size[0]}x{kernel_size[1]}_{lamda}"
-    )
+    csv_file_name = f"{contrast}_{mask_name}_{N_coils}_{R}_{kernel_size[0]}x{kernel_size[1]}_{lamda}"
     print(csv_file_name)
 
     mask_func = create_mask_for_mask_type(
-        mask_type_str="one_sided", center_fractions=[center_fractions], accelerations=[R]
+        mask_type_str="one_sided",
+        center_fractions=[center_fractions],
+        accelerations=[R],
     )
-
-
 
     dataset = SliceDataset(
         root="test/data",
@@ -107,22 +100,16 @@ for lamda in lamda_list:
         # proposed grappa
         masked_kspace: torch.Tensor
         calib: torch.Tensor
-        kspace1, (proposed_t_unique, proposed_t_weights, proposed_t_estimation) = grappa(
-            torch.view_as_complex_copy(masked_kspace).cuda(),
-            calib.cuda(),
-            coil_axis=0,
-            undersampling_pattern="2D",
-            kernel_size=kernel_size,
-            lamda= lamda
+        kspace1, (proposed_t_unique, proposed_t_weights, proposed_t_estimation) = (
+            grappa(
+                torch.view_as_complex_copy(masked_kspace).cuda(),
+                calib.cuda(),
+                coil_axis=0,
+                undersampling_pattern="2D",
+                kernel_size=kernel_size,
+                lamda=lamda,
+            )
         )
-        # kspace1, (proposed_t_unique, proposed_t_weights, proposed_t_estimation) = grappa(
-        #     torch.view_as_complex_copy(masked_kspace),
-        #     calib,
-        #     coil_axis=0,
-        #     undersampling_pattern="2D",
-        #     kernel_size=kernel_size,
-        #     lamda= lamda
-        # )
 
         kspace1 = to_tensor(kspace1.cpu())
         image = ifft2c_new(kspace1)
@@ -138,12 +125,8 @@ for lamda in lamda_list:
         # pygrappa
         kspace = torch.view_as_complex_copy(masked_kspace).numpy()
         calib = calib.numpy()
-        kspace2, (pygrappa_t_unique, pygrappa_t_weights, pygrappa_t_estimation) = pygrappa(
-            kspace,
-            calib,
-            coil_axis=0,
-            kernel_size=kernel_size,
-            lamda= lamda
+        kspace2, (pygrappa_t_unique, pygrappa_t_weights, pygrappa_t_estimation) = (
+            pygrappa(kspace, calib, coil_axis=0, kernel_size=kernel_size, lamda=lamda)
         )
 
         kspace2 = to_tensor(kspace2)
