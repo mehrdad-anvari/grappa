@@ -1,5 +1,5 @@
 from utils.mri_data import SliceDataset
-from utils.transforms import to_tensor, complex_center_crop, tensor_to_complex_np
+from utils.transforms import to_tensor, complex_center_crop
 from utils.fftc import ifft2c_new
 from utils.calib import get_calib
 from utils.math import complex_abs
@@ -65,7 +65,7 @@ def benchmark(
         kspace = to_tensor(kspace)
         calib = get_calib(torch.view_as_complex_copy(kspace), center_fractions)
         mask = uniform_mask(shape, R, center_fractions).unsqueeze(-1)
-        masked_kspace = kspace * mask
+        masked_kspace = kspace.detach().clone() * mask
 
         return masked_kspace, kspace, calib, mask
 
@@ -80,8 +80,7 @@ def benchmark(
     records_data = []
     for i, (masked_kspace, original_kspace, calib, mask) in enumerate(dataset):
         original_kspace: torch.Tensor
-        kspace0 = original_kspace.detach().clone()
-        image_gt = ifft2c_new(kspace0)
+        image_gt = ifft2c_new(original_kspace)
         crop_size = (image_gt.shape[-2], image_gt.shape[-2])
         image_gt = complex_center_crop(image_gt, crop_size)
         image_gt = complex_abs(image_gt)
@@ -92,7 +91,7 @@ def benchmark(
         calib: torch.Tensor
 
         sig_2d = torch.view_as_complex_copy(masked_kspace)  # (nc, kx, ky)
-        acs_2d = calib  # (nc, acsky, acskx)
+        acs_2d = calib.detach().clone()  # (nc, acsky, acskx)
 
         # Insert dummy kz at axis=2 → (nc, ky, 1, kx)
         sig_4d = torch.permute(sig_2d.unsqueeze(2), (0, 3, 2, 1))
@@ -141,13 +140,15 @@ def benchmark(
             torch.view_as_complex_copy(masked_kspace).cuda(),
             calib.cuda(),
             coil_axis=0,
+            lamda=lamda,
+            kernel_size=kernel_size,
             undersampling_pattern="2D",
         )
 
         kspace2 = to_tensor(kspace2.cpu())
         image = ifft2c_new(kspace2)
 
-        # crop_size = (image.shape[-2], image.shape[-2])
+        crop_size = (image.shape[-2], image.shape[-2])
         image = complex_center_crop(image, crop_size)
         image = complex_abs(image)
         image = rss(image)
