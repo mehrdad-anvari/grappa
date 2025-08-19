@@ -120,7 +120,7 @@ for i, (masked_kspace, original_kspace, calib, mask) in enumerate(dataset):
     image = ifft2c_new(kspace1)
     crop_size = (image.shape[-2], image.shape[-2])
     
-    image = complex_center_crop(image, crop_size, False)
+    image = complex_center_crop(image, crop_size)
     image = complex_abs(image)
     image = rss(image)
 
