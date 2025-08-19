@@ -116,8 +116,8 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     kspace1 = kspace1.cpu()
 
     # Padding
-    pad_ky = (2, 2)
-    pad_kx = (8, 7)
+    pad_ky = (masked_kspace.shape[1] - kspace1.shape[1], 0)
+    pad_kx = (masked_kspace.shape[2] - kspace1.shape[2], 0)
 
     pad = (0, 0, *pad_kx, *pad_ky)
 
