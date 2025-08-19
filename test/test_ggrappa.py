@@ -4,8 +4,9 @@ from utils.fftc import ifft2c_new
 from utils.math import complex_abs
 from utils.coil_combine import rss
 from utils.calib import get_calib
-
+from utils.evaluate import ssim, psnr, nmse
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
 from ggrappa.grappaND import GRAPPA_Recon
 from grappa.grappa import grappa
@@ -76,12 +77,11 @@ dataset = SliceDataset(
     challenge="multicoil",
     transform=transform,
     # num_coils=[4],
-    regex_ex="FLA",
+    regex_ex="T2",
 )
 
 for masked_kspace, original_kspace, calib, mask in dataset:
    
-
     # ggrappa
     masked_kspace: torch.Tensor
     calib: torch.Tensor
@@ -99,7 +99,7 @@ for masked_kspace, original_kspace, calib, mask in dataset:
         af=[4, 1],  # [afy, afz] for 2D
         kernel_size=(5, 1, 5),  # (ky, kz, kx) with kz=1 in 2D
         lambda_=1e-2,
-        cuda=True,
+        cuda=False,
         cuda_mode="all",
         quiet=True,
     )
@@ -114,9 +114,19 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     kspace1 = torch.view_as_real(kspace1)
 
     kspace1 = kspace1.cpu()
+
+    # Padding
+    pad_ky = (2, 2)
+    pad_kx = (8, 7)
+
+    pad = (0, 0, *pad_kx, *pad_ky)
+
+    kspace1 = F.pad(kspace1, pad)
+
     image = ifft2c_new(kspace1)
     crop_size = (image.shape[-2], image.shape[-2])
-    image = complex_center_crop(image, crop_size)
+    
+    image = complex_center_crop(image, crop_size, False)
     image = complex_abs(image)
     image = rss(image)
 
@@ -125,6 +135,21 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     plt.title("ggrappa")
     plt.imshow(image, cmap="gray")
     plt.savefig("test/results/test_ggrappa_ggrappa.png")
+
+
+    original_kspace: torch.Tensor
+    kspace0 = original_kspace.detach().clone()
+    image_gt = ifft2c_new(kspace0)
+    # crop_size = (image_gt.shape[-2], image_gt.shape[-2])
+    image_gt = complex_center_crop(image_gt, crop_size)
+    image_gt = complex_abs(image_gt)
+    image_gt = rss(image_gt)
+
+    grappa_ssim = ssim(image_gt.numpy(), image.numpy())
+    grappa_psnr = psnr(image_gt.numpy(), image.numpy())
+    grappa_nmse = nmse(image_gt.numpy(), image.numpy())
+
+
 
     # proposed
     kspace2, (t_unique, t_weights, t_estimation) = grappa(
@@ -141,7 +166,8 @@ for masked_kspace, original_kspace, calib, mask in dataset:
 
     kspace2 = to_tensor(kspace2.cpu())
     image = ifft2c_new(kspace2)
-    crop_size = (image.shape[-2], image.shape[-2])
+
+    # crop_size = (image.shape[-2], image.shape[-2])
     image = complex_center_crop(image, crop_size)
     image = complex_abs(image)
     image = rss(image)
@@ -150,6 +176,21 @@ for masked_kspace, original_kspace, calib, mask in dataset:
     plt.axis(False)
     plt.title("proposed")
     plt.imshow(image, cmap="gray")
+
+    proposed_ssim = ssim(image_gt.numpy(), image.numpy())
+    proposed_psnr = psnr(image_gt.numpy(), image.numpy())
+    proposed_nmse = nmse(image_gt.numpy(), image.numpy())
+
+
+    print(grappa_ssim)
+    print(proposed_ssim)
+
+    print(grappa_psnr)
+    print(proposed_psnr)
+
+    print(grappa_nmse)
+    print(proposed_nmse)
+
     plt.savefig("test/results/test_ggrappa_proposed.png")
 
     print("speed up factor (T_ggrappa/T_proposed) = ", total_ggrappa / total_proposed)
