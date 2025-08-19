@@ -1,11 +1,15 @@
 from utils.mri_data import SliceDataset
-from utils.transforms import to_tensor
+from utils.transforms import to_tensor, complex_center_crop, tensor_to_complex_np
+from utils.fftc import ifft2c_new
 from utils.calib import get_calib
-
+from utils.math import complex_abs
+from utils.coil_combine import rss
+from utils.evaluate import ssim, psnr, nmse
 from ggrappa.grappaND import GRAPPA_Recon
 from grappa.grappa import grappa
 
 import torch
+import torch.nn.functional as F
 import pandas as pd
 import argparse
 
@@ -75,6 +79,14 @@ def benchmark(
     csv_file_name = f"{prefix}_{contrast}_{mask_name}_{N_coils}_{R}_{kernel_size[0]}x{kernel_size[1]}_{lamda}"
     records_data = []
     for i, (masked_kspace, original_kspace, calib, mask) in enumerate(dataset):
+        original_kspace: torch.Tensor
+        kspace0 = original_kspace.detach().clone()
+        image_gt = ifft2c_new(kspace0)
+        crop_size = (image_gt.shape[-2], image_gt.shape[-2])
+        image_gt = complex_center_crop(image_gt, crop_size)
+        image_gt = complex_abs(image_gt)
+        image_gt = rss(image_gt)
+
         # ggrappa
         masked_kspace: torch.Tensor
         calib: torch.Tensor
@@ -97,6 +109,33 @@ def benchmark(
             quiet=True,
         )
 
+        # Back to 2D shape for your downstream IFFT
+        kspace1 = torch.permute(kspace1, (0, 3, 2, 1))
+        kspace1 = kspace1.squeeze(2)  # (nc, kx, ky)
+        kspace1 = torch.view_as_real(kspace1)
+
+        kspace1 = kspace1.cpu()
+
+        # Padding
+        pad_ky = (masked_kspace.shape[1] - kspace1.shape[1], 0)
+        pad_kx = (masked_kspace.shape[2] - kspace1.shape[2], 0)
+
+        pad = (0, 0, *pad_kx, *pad_ky)
+
+        kspace1 = F.pad(kspace1, pad)
+
+        image = ifft2c_new(kspace1)
+        crop_size = (image.shape[-2], image.shape[-2])
+        
+        image = complex_center_crop(image, crop_size)
+        image = complex_abs(image)
+        image = rss(image)
+
+        ggrappa_ssim = ssim(image_gt.numpy(), image.numpy())
+        ggrappa_psnr = psnr(image_gt.numpy(), image.numpy())
+        ggrappa_nmse = nmse(image_gt.numpy(), image.numpy())
+
+
         # proposed
         kspace2, (t_unique, proposed_t_weights, proposed_t_estimation) = grappa(
             torch.view_as_complex_copy(masked_kspace).cuda(),
@@ -105,11 +144,30 @@ def benchmark(
             undersampling_pattern="2D",
         )
 
+        kspace2 = to_tensor(kspace2.cpu())
+        image = ifft2c_new(kspace2)
+
+        # crop_size = (image.shape[-2], image.shape[-2])
+        image = complex_center_crop(image, crop_size)
+        image = complex_abs(image)
+        image = rss(image)
+
+        proposed_ssim = ssim(image_gt.numpy(), image.numpy())
+        proposed_psnr = psnr(image_gt.numpy(), image.numpy())
+        proposed_nmse = nmse(image_gt.numpy(), image.numpy())
+
+
         record = {
             "t_weights_proposed": proposed_t_weights,
             "t_estimation_proposed": proposed_t_estimation,
             "t_weights_ggrappa": ggrappa_t_weights,
             "t_estimation_ggrappa": ggrappa_t_estimation,
+            "ssim_proposed": proposed_ssim,
+            "psnr_proposed": proposed_psnr,
+            "nmse_proposed": proposed_nmse,
+            "ssim_ggrappa": ggrappa_ssim,
+            "psnr_ggrappa": ggrappa_psnr,
+            "nmse_ggrappa": ggrappa_nmse,
         }
 
         print(i, "/", N, ":\n", record)
