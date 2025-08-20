@@ -156,6 +156,8 @@ for masked_kspace, original_kspace, calib, mask in dataset:
         torch.view_as_complex_copy(masked_kspace).cuda(),
         calib.cuda(),
         coil_axis=0,
+        kernel_size=(5,5),  # (ky, kx)
+        lamda=1e-2,
         undersampling_pattern="2D",
     )
 
