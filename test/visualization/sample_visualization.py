@@ -3,7 +3,7 @@ import os
 # os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+import numpy as np
 from utils.mri_data import SliceDataset
 from utils.transforms import to_tensor, complex_center_crop
 from utils.fftc import ifft2c_new
@@ -203,9 +203,11 @@ def benchmark(
             (image_gt_minus_ggrappa, "Difference (GGRAPPA)")
         ]
 
+        rotated_images = [(np.rot90(img, 2), title) for img, title in images]
+
         fig, axes = plt.subplots(4, 2, figsize=(2.8, 6))  # 4 rows, 2 cols
 
-        for ax, (img, title) in zip(axes.ravel(), images):
+        for ax, (img, title) in zip(axes.ravel(), rotated_images):
             ax.imshow(img, cmap="gray")    # or cmap="viridis" etc
             ax.set_title(title)
             ax.axis("off")                 # Hide axes
