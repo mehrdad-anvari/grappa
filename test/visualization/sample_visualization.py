@@ -1,5 +1,5 @@
 
-# import os
+import os
 # os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -199,8 +199,8 @@ def benchmark(
             (image_gt_minus_proposed, "Difference (Proposed)"),
             (image_pygrappa, "PyGRAPPA"),
             (image_gt_minus_pygrappa, "Difference (PyGRAPPA)"),
-            (image_ggrappa, "GRAPPA"),
-            (image_gt_minus_ggrappa, "Difference (GRAPPA)")
+            (image_ggrappa, "GGRAPPA"),
+            (image_gt_minus_ggrappa, "Difference (GGRAPPA)")
         ]
 
         fig, axes = plt.subplots(4, 2, figsize=(2.8, 6))  # 4 rows, 2 cols
