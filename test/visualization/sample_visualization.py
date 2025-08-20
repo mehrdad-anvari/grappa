@@ -199,8 +199,8 @@ def benchmark(
             (image_gt_minus_proposed, "Difference (Proposed)"),
             (image_pygrappa, "PyGRAPPA"),
             (image_gt_minus_pygrappa, "Difference (PyGRAPPA)"),
-            (image_ggrappa, "GGRAPPA"),
-            (image_gt_minus_ggrappa, "Difference (GGRAPPA)")
+            (image_ggrappa, "gGRAPPA"),
+            (image_gt_minus_ggrappa, "Difference (gGRAPPA)")
         ]
 
         rotated_images = [(np.rot90(img, 2), title) for img, title in images]
