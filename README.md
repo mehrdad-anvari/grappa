@@ -32,7 +32,7 @@ pip intall -e .
 
 Below is an example reconstruction on a T2-weighted brain MRI slice:
 
-![Reconstruction Example](docs/images/sample_plot.png)
+![Reconstruction Example](docs/images/sample_plot.jpg)
 
 *Experimental setup: kernel size = 5×5, number of coils = 20, acceleration factor R = 4, λ = 0.1.*
 
